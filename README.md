@@ -35,7 +35,7 @@ So we use this string to tell sox which microphone to record
 ```bash
 sox -t coreaudio "MacBook Neo Microphone" mic.wav
 ```
-Note: it is _really annoying_ that Apple's CoreAudio identifies the mainboard mic using a model-specific string, rather than, say, the digit 0 for all Macs, but it is what it is. 
+Note: it is _really annoying_ that when picking the audio input in soxApple's CoreAudio identifies the mainboard mic using a model-specific string, rather than, say, the digit 0 for all Macs, but it is what it is. 
 
 And this worked to record crackle-free audio with sox, and pipe it through to gffmpeg to convert to mp3.
 ```bash
@@ -114,3 +114,66 @@ This script didn't work because screen.mp4 is not created (the relevant line exe
 
 
 I suspect that the piping from sox to ffmpeg is the cause of the problem. So next thing to try is recording audio (with sox) and video (with ffmpeg) in separate processed, and muxing them afterwards. Video of screen only so no lip-sync issues will arise.
+
+First attempt did not work - the ffmpeg process was running but producing no output. Suspected it was a mac permissions issue (I had given the terminal access to the screen to record it but this permission might not be inherited by processes it spawns).
+
+This suspicion seemed to be confirmed whan a script which runs sox first in the background, and then runs ffmpeg in  the foreground produced vidoe of the screen. The audio was free of overruns as well. Result!
+
+```bash
+sox -t coreaudio "MacBook Neo Microphone" mic.wav & 
+ffmpeg -f avfoundation -framerate 30 -i "1:" -c:v libx264 -pix_fmt yuv420p -y screen.mp4
+```
+
+Trying
+
+
+```bash
+sox -t coreaudio "MacBook Neo Microphone" mic.wav & 
+ffmpeg -f avfoundation -framerate 30 -i "1:" -c:v h264_videotoolbox -pix_fmt yuv420p -y screen.mp4
+```
+
+That worked too.
+
+### Keyboard shortcut for ending recording
+
+The recording can be ended by executing the command `killall sox ffmpeg`. This needs to be triggered by a keyboard shortcut so that the final few seconds of video do not feature a terminal where this is typed.
+
+On the Mac, this is set up with Automator.
+
+- Open Automator, choose Quick Action, Pick Utilities, then Run Shell Script
+- Choose the options so that Workflow receives `no input` in `any application`
+   - this means that the "workflow" works in any application and does not expect to read text
+   - I initially forgot the 'no input' part and the script just refused to run outside Automator
+- pick the shell (/bin/sh will do)
+  - user-installed shells are not listed among the options so no recent bash is available
+- set "Pass Input' to stdin
+  - other choice is 'as arguments'
+  - meaningless setting when you've already configured 'no input'
+  - enter the command as `killall sox ffmpeg`
+- File/Save and name it "Zap Recording"
+  - saves with file extension .workflow somewhere
+  - not at all clear that this saved the action or whether some other step was required
+
+Now set up A Keyboard Shortcut as follows
+
+- System Settings/Keyboard
+- Click "Keyboard Shortcuts" button
+- Select Services in the column on left
+- The new Quick action is under "General"
+  - if you neglected to configure it with "no input" it would be under "text"
+- you set a new shortcut by selecting the action (Zap Recording in this case) and double clicking it somewhere/somehow until the existing shortcut icons turn into a text box
+  - this was an almighty faff as there seemed to be no discernible logic to where/when to double click to create this prompt
+- Enter the shortcut in the text box and click 'done'
+  - I chose Opt|Sh|Com|\
+
+You will not be warned if your chosen shortcut is already in use. As far as I could tell, any such conflict results in neither the new purpose of the shortcut nor the existing one surviving your click of the 'done' button. There is no way back except to select "Restore Defaults" which will erase any existing custom shortcuts. Yet another triumph of UI design by the esteemed Apple Inc.
+
+If there is some error in your Quick Action configuration, typing the shortcut generates an error beep, but no other diagnostic information is supplied - this is especially frustrating when the Quick Action works inside Automator (when clicking the 'Run' button in the Editor.
+
+Setting up the equivalent functionality to the above in Debian Linux is _way_ more straightforward.
+
+
+
+
+
+
