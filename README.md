@@ -12,7 +12,7 @@ It's not possibly to record audio of satisfactory quality using ffmpeg on my Mac
 Trying
 
 ```bash
-ffmpeg -f avfoundation -list_devices true -i "" # use ot confirm mic is input ":0" 
+ffmpeg -f avfoundation -list_devices true -i "" # use to confirm mic is input ":0" 
 ffmpeg -f avfoundation -i ":0"  -c:a  aac_at -global_quality:a 0 -aac_at_quality 0 -aac_at_mode vbr -q:a 14  -y mic.m4a
 ```
 results in "stuttering" where the audio disappears briefly maybe once every second or so - not even cloe to acceptable quality 
@@ -29,6 +29,13 @@ echo "$src"
 ```
 
 This will print, e.g., "MacBook Neo Microphone" if your machine is a Neo.
+
+Alternatively,
+
+```bash
+src="$(ox -V -t coreaudio null -n 2>&1 | grep "found audio" | cut -d"'" -f2 | grep Mac)"
+echo "$src"
+```
 
 So we use this string to tell sox which microphone to record
 
@@ -132,7 +139,20 @@ sox -t coreaudio "MacBook Neo Microphone" mic.wav &
 ffmpeg -f avfoundation -framerate 30 -i "1:" -c:v h264_videotoolbox -pix_fmt yuv420p -y screen.mp4
 ```
 
-That worked too.
+That worked too. Compressing the audio to ogg also worked. I changed the pixel format from yuv420p to suppress a complaint from ffmpeg on my test device but it persisted so I dropped that. Specified main profile just for fun.
+
+```bash
+sox -t coreaudio "MacBook Neo Microphone" mic.ogg & 
+ffmpeg -hide_banner -f avfoundation -framerate 30 -i "2:" -c:v h264_videotoolbox  -profile main  -y screen.mp4
+```
+
+
+### Muxing video and audio
+
+```bash
+ffmpeg -i mic.ogg -i screen.mp4 -c copy combo.mp4
+```
+This seemed to work ok - yet to test for being web-friendly
 
 ### Keyboard shortcut for ending recording
 
@@ -173,7 +193,48 @@ If there is some error in your Quick Action configuration, typing the shortcut g
 Setting up the equivalent functionality to the above in Debian Linux is _way_ more straightforward.
 
 
+### Running the record script from file finder
 
+Copying the approach in https://stackoverflow.com/questions/56169040/run-bash-script-on-selected-files-in-finder
+but running a shell script rather than an Apple script. Selecting that you want to pass the inputs as arguments results in the auto-generation of this code
+
+```bash
+for f in "$@"
+do
+	echo "$f"
+done
+```
+
+Set the workflow to receive "PDF files" in "Finder.app". Now the name of the workflow appears under "Quick actions" when you right click a PDF file. The output of the echo statement above disappears into a black hole, as a terminal is not opened to run the script.
+
+Can work around this using a clone of zenity
+
+```bash
+brew install ncruces/tap/zenity
+```
+_`brew install zenity` will install the X11 version, which is not what we need in this context_
+
+Changed the script to
+```bash
+#!/opt/homebrew/bin//bash
+for f in "$@"
+do
+	/opt/homebrew/bin/zenity --question --text "$f"
+done
+```
+
+I had to allow some "runner" permission on the first run to allow the script to complete execution. The PATH variable for the script is `/usr/bin:/bin:/usr/sbin:/sbin`, and so any utility installed with homebrew must have an explicit path
+
+Best strategy seems to be to invoke another script from this one. For the moment, I will leave it as
+
+```bash
+#!/opt/homebrew/bin//bash
+file=$(basename "$1")
+name="${file%.*}"
+extension="${file##*.}"
+/opt/homebrew/bin/zenity --question --text " Record '$file'?"
+exit 0 # otherwise Automator will report an error if you answer 'N'
+```
 
 
 
